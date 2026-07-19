@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scientific Calculator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="calculator">
+    <input type="text" class="display" id="display" readonly>
+    <div class="buttons">
+      <!-- Scientific functions -->
+      <button class="btn mode active" id="radBtn" onclick="setMode(false)">RAD</button>
+      <button class="btn mode" id="degBtn" onclick="setMode(true)">DEG</button>
+      <button class="btn sci" onclick="appendFunction('sin')">sin</button>
+      <button class="btn sci" onclick="appendFunction('cos')">cos</button>
+      <button class="btn sci" onclick="appendFunction('tan')">tan</button>
+
+      <button class="btn sci" onclick="appendFunction('asin')">sin⁻¹</button>
+      <button class="btn sci" onclick="appendFunction('acos')">cos⁻¹</button>
+      <button class="btn sci" onclick="appendFunction('atan')">tan⁻¹</button>
+      <button class="btn sci" onclick="appendFunction('abs')">|x|</button>
+      <button class="btn sci" onclick="appendFunction('sqrt')">√</button>
+
+      <button class="btn sci" onclick="appendFunction('log')">log</button>
+      <button class="btn sci" onclick="appendFunction('ln')">ln</button>
+      <button class="btn operator" onclick="appendValue('^')">^</button>
+      <button class="btn operator" onclick="appendValue('/')">÷</button>
+      <button class="btn delete" onclick="deleteLast()">⌫</button>
+
+      <button class="btn sci" onclick="appendValue('pi')">π</button>
+      <button class="btn sci" onclick="appendValue('e')">e</button>
+      <button class="btn sci" onclick="appendValue('(')">(</button>
+      <button class="btn sci" onclick="appendValue(')')">)</button>
+      <button class="btn operator" onclick="appendValue('*')">×</button>
+
+      <!-- Number pad -->
+      <button class="btn number" onclick="appendValue('7')">7</button>
+      <button class="btn number" onclick="appendValue('8')">8</button>
+      <button class="btn number" onclick="appendValue('9')">9</button>
+      <button class="btn operator" onclick="appendValue('!')">!</button>
+      <button class="btn operator" onclick="appendValue('-')">−</button>
+
+      <button class="btn number" onclick="appendValue('4')">4</button>
+      <button class="btn number" onclick="appendValue('5')">5</button>
+      <button class="btn number" onclick="appendValue('6')">6</button>
+      <button class="btn sci" onclick="appendValue('ans')">Ans</button>
+      <button class="btn operator" onclick="appendValue('+')">+</button>
+
+      <button class="btn number" onclick="appendValue('1')">1</button>
+      <button class="btn number" onclick="appendValue('2')">2</button>
+      <button class="btn number" onclick="appendValue('3')">3</button>
+      <button class="btn equal span2" onclick="calculate()">=</button>
+
+      <button class="btn number zero" onclick="appendValue('0')">0</button>
+      <button class="btn number" onclick="appendValue('.')">.</button>
+      <button class="btn clear span2" onclick="clearDisplay()">C</button>
+    </div>
+  </div>
+
+  <script>
+    const display = document.getElementById('display');
+    const radBtn = document.getElementById('radBtn');
+    const degBtn = document.getElementById('degBtn');
+
+    let expression = '';
+    let isDegree = false;
+    let ans = 0;
+
+    function updateDisplay() {
+      // Show a nicely formatted version of the internal expression
+      let pretty = expression
+        .replace(/\*/g, '×')
+        .replace(/\//g, '÷')
+        .replace(/sqrt\(/g, '√(')
+        .replace(/\bpi\b/g, 'π')
+        .replace(/\bans\b/g, 'Ans');
+      display.value = pretty;
+    }
+
+    function appendValue(value) {
+      const current = tokenType(value);
+
+      // When starting fresh with a number, replace a single previous answer
+      if (current.type === 'number' && /^-?\d+(\.\d+)?$/.test(expression)) {
+        expression = '';
+      }
+
+      // Insert an implicit multiplication where it makes sense
+      if (needsMultiply(value)) {
+        expression += '*';
+      }
+
+      expression += value;
+      updateDisplay();
+    }
+
+    function appendFunction(name) {
+      const token = name + '(';
+      if (needsMultiply(token)) {
+        expression += '*';
+      }
+      expression += token;
+      updateDisplay();
+    }
+
+    function tokenType(token) {
+      const nameMatch = token.match(/^[a-zA-Z_][a-zA-Z0-9_]*/);
+      if (nameMatch) {
+        const name = nameMatch[0];
+        if (name === 'pi' || name === 'e' || name === 'ans') return { type: 'constant', name };
+        if (['sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'log', 'ln', 'sqrt', 'abs'].includes(name)) return { type: 'function', name };
+      }
+      if (/^\d/.test(token) || token === '.') return { type: 'number' };
+      if (token === '(') return { type: 'open' };
+      if (token === ')') return { type: 'close' };
+      return { type: 'operator' };
+    }
+
+    function lastTokenType(expr) {
+      if (!expr.length) return { type: 'none' };
+      const i = expr.length - 1;
+      const last = expr[i];
+
+      if (last === ')') return { type: 'close' };
+      if (last === '(') return { type: 'open' };
+      if (/[\d.]/.test(last)) {
+        return { type: 'number' };
+      }
+      if (/[a-zA-Z_]/.test(last)) {
+        let j = i;
+        while (j >= 0 && /[a-zA-Z0-9_]/.test(expr[j])) j--;
+        const name = expr.slice(j + 1, i + 1);
+        if (name === 'pi' || name === 'e' || name === 'ans') return { type: 'constant', name };
+        if (['sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'log', 'ln', 'sqrt', 'abs'].includes(name)) return { type: 'function', name };
+      }
+      return { type: 'operator' };
+    }
+
+    function needsMultiply(value) {
+      if (!expression.length) return false;
+      const last = lastTokenType(expression);
+      const current = tokenType(value);
+
+      if (last.type === 'number' || last.type === 'constant' || last.type === 'close') {
+        if (current.type === 'open') return true;
+        if (current.type === 'function' || current.type === 'constant') return true;
+      }
+      return false;
+    }
+
+    function clearDisplay() {
+      expression = '';
+      updateDisplay();
+    }
+
+    function deleteLast() {
+      // Remove whole function names if the cursor is at the end of one
+      const funcs = ['asin(', 'acos(', 'atan(', 'sin(', 'cos(', 'tan(', 'log(', 'ln(', 'sqrt(', 'abs(', 'pi', 'ans'];
+      for (const fn of funcs) {
+        if (expression.endsWith(fn)) {
+          expression = expression.slice(0, -fn.length);
+          updateDisplay();
+          return;
+        }
+      }
+      expression = expression.slice(0, -1);
+      updateDisplay();
+    }
+
+    function setMode(degree) {
+      isDegree = degree;
+      radBtn.classList.toggle('active', !isDegree);
+      degBtn.classList.toggle('active', isDegree);
+    }
+
+    function calculate() {
+      try {
+        // Auto-close any missing parentheses so sin^-1(.5 works like sin^-1(0.5)
+        let evalExpression = expression;
+        const openCount = (evalExpression.match(/\(/g) || []).length;
+        const closeCount = (evalExpression.match(/\)/g) || []).length;
+        if (openCount > closeCount) {
+          evalExpression += ')'.repeat(openCount - closeCount);
+        }
+
+        const result = evaluate(evalExpression);
+        const formatted = formatResult(result);
+        expression = formatted;
+        ans = result;
+        display.value = formatted;
+      } catch (err) {
+        display.value = 'Error';
+        setTimeout(() => {
+          expression = '';
+          updateDisplay();
+        }, 1500);
+      }
+    }
+
+    function formatResult(value) {
+      if (!Number.isFinite(value)) throw new Error('Invalid result');
+      if (Number.isInteger(value)) return String(value);
+      return String(parseFloat(value.toFixed(10))).replace('.', '.');
+    }
+
+    // ---------- Safe expression parser/evaluator ----------
+
+    function evaluate(input) {
+      const tokens = tokenize(input);
+      let index = 0;
+
+      function peek() {
+        return tokens[index];
+      }
+
+      function consume() {
+        return tokens[index++];
+      }
+
+      function expectParen() {
+        const t = peek();
+        if (!t || t.value !== ')') throw new Error('Missing )');
+        consume();
+      }
+
+      function parseExpression() {
+        let value = parseTerm();
+        while (peek() && (peek().value === '+' || peek().value === '-')) {
+          const op = consume().value;
+          const rhs = parseTerm();
+          value = op === '+' ? value + rhs : value - rhs;
+        }
+        return value;
+      }
+
+      function parseTerm() {
+        let value = parseFactor();
+        while (peek() && (peek().value === '*' || peek().value === '/')) {
+          const op = consume().value;
+          const rhs = parseFactor();
+          value = op === '*' ? value * rhs : value / rhs;
+        }
+        return value;
+      }
+
+      function parseFactor() {
+        let value = parseUnary();
+        if (peek() && peek().value === '^') {
+          consume();
+          const exponent = parseFactor();
+          value = Math.pow(value, exponent);
+        }
+        return value;
+      }
+
+      function parseUnary() {
+        const t = peek();
+        if (t && (t.value === '+' || t.value === '-')) {
+          const op = consume().value;
+          const value = parseUnary();
+          return op === '+' ? value : -value;
+        }
+        return parsePostfix();
+      }
+
+      function parsePostfix() {
+        let value = parsePrimary();
+        if (peek() && peek().value === '!') {
+          consume();
+          value = factorial(value);
+        }
+        return value;
+      }
+
+      function parsePrimary() {
+        const t = peek();
+        if (!t) throw new Error('Unexpected end');
+
+        if (t.type === 'num') {
+          consume();
+          return t.value;
+        }
+
+        if (t.type === 'id') {
+          consume();
+          if (t.value === 'pi') return Math.PI;
+          if (t.value === 'e') return Math.E;
+          if (t.value === 'ans') return ans;
+
+          // Functions require parentheses
+          if (!peek() || peek().value !== '(') {
+            throw new Error('Function needs (');
+          }
+          consume(); // '('
+          const arg = parseExpression();
+          expectParen();
+          return applyFunction(t.value, arg);
+        }
+
+        if (t.value === '(') {
+          consume();
+          const value = parseExpression();
+          expectParen();
+          return value;
+        }
+
+        throw new Error('Unexpected token');
+      }
+
+      const result = parseExpression();
+      if (index < tokens.length) throw new Error('Unexpected token');
+      return result;
+    }
+
+    function tokenize(input) {
+      const tokens = [];
+      let i = 0;
+      const str = input.replace(/\s+/g, '');
+
+      while (i < str.length) {
+        const c = str[i];
+
+        if (/\s/.test(c)) {
+          i++;
+          continue;
+        }
+
+        if (/[+\-*/^!()]/g.test(c)) {
+          tokens.push({ type: 'op', value: c });
+          i++;
+          continue;
+        }
+
+        if (/\d/.test(c) || c === '.') {
+          let j = i;
+          let hasDot = false;
+          while (j < str.length && (/\d/.test(str[j]) || str[j] === '.')) {
+            if (str[j] === '.') {
+              if (hasDot) break;
+              hasDot = true;
+            }
+            j++;
+          }
+          const numStr = str.slice(i, j);
+          if (!/^\d+(\.\d*)?|\.\d+$/.test(numStr)) throw new Error('Invalid number');
+          tokens.push({ type: 'num', value: parseFloat(numStr) });
+          i = j;
+          continue;
+        }
+
+        if (/[a-zA-Z_]/.test(c)) {
+          let j = i;
+          while (j < str.length && /[a-zA-Z0-9_]/.test(str[j])) j++;
+          tokens.push({ type: 'id', value: str.slice(i, j) });
+          i = j;
+          continue;
+        }
+
+        throw new Error('Invalid character');
+      }
+
+      return tokens;
+    }
+
+    function applyFunction(name, arg) {
+      const rad = isDegree ? arg * Math.PI / 180 : arg;
+      switch (name) {
+        case 'sin': return Math.sin(rad);
+        case 'cos': return Math.cos(rad);
+        case 'tan': return Math.tan(rad);
+        case 'asin': {
+          const result = Math.asin(arg);
+          return isDegree ? result * 180 / Math.PI : result;
+        }
+        case 'acos': {
+          const result = Math.acos(arg);
+          return isDegree ? result * 180 / Math.PI : result;
+        }
+        case 'atan': {
+          const result = Math.atan(arg);
+          return isDegree ? result * 180 / Math.PI : result;
+        }
+        case 'log': return Math.log10(arg);
+        case 'ln': return Math.log(arg);
+        case 'sqrt': return Math.sqrt(arg);
+        case 'abs': return Math.abs(arg);
+        default: throw new Error('Unknown function');
+      }
+    }
+
+    function factorial(n) {
+      if (n < 0 || !Number.isInteger(n)) throw new Error('Invalid factorial');
+      let result = 1;
+      for (let k = 2; k <= n; k++) result *= k;
+      return result;
+    }
+
+    // Keyboard support
+    document.addEventListener('keydown', (e) => {
+      const key = e.key;
+      if (/[0-9.]/.test(key)) appendValue(key);
+      if (['+', '-', '*', '/', '^', '!', '(', ')'].includes(key)) appendValue(key);
+      if (key === 'Enter') calculate();
+      if (key === 'Backspace') deleteLast();
+      if (key === 'Escape') clearDisplay();
+    });
+  </script>
+</body>
+</html>
+</script>
